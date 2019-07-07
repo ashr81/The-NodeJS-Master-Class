@@ -1,8 +1,11 @@
 const http = require("http");
+const https = require("https");
 var url = require("url");
 const StringDecoder = require("string_decoder").StringDecoder
+var config = require('./config');
+var fs = require('fs');
 
-const server = http.createServer(function(req, res) {
+const unifiedServer = function(req, res) {
   const { 
     pathname: path,
     query: queryStringObj
@@ -30,6 +33,7 @@ const server = http.createServer(function(req, res) {
       statusCode = typeof(statusCode) == 'number' ? statusCode : 200;
       payload = typeof(payload) == 'object' ? payload : {};
       var payloadString = JSON.stringify(payload)
+      res.setHeader('Content-type', 'application/json');
       res.writeHead(statusCode)
       res.end(payloadString)
       console.log(`request received on path: ${trimmedPath}
@@ -39,24 +43,40 @@ const server = http.createServer(function(req, res) {
       ${statusCode} and payload: ${payloadString}`);
     })
   })
-})
+}
 
-server.listen(3000, function() {
-  console.log("Server is listening on port 3000 now.")
+const httpServer = http.createServer(unifiedServer)
+
+httpServer.listen(config.httpPort, function() {
+  console.log(`Server is listening on port ${config.httpPort} in ${config.envName} mode.`)
+})
+const httpsServerOptions = {
+  key: fs.readFileSync('./https/key.pem'),
+  cert: fs.readFileSync('./https/cert.pem')
+}
+const httpsServer = https.createServer(httpsServerOptions, unifiedServer)
+
+httpsServer.listen(config.httpsPort, function() {
+  console.log(`Server is listening on port ${config.httpsPort} in ${config.envName} mode.`)
 })
 
 // Define handlers
 const handlers = {}
 
-handlers.sample = function(data, callback) {
-  callback(406, { name: 'Sample Handler' })
+handlers.ping = function(data, callback) {
+  callback(200)
+}
+
+handlers.hello = function(data, callback) {
+  callback(200, {message: `Welcome: ${data.queryStringObj.name ? data.queryStringObj.name : 'Home'}`})
 }
 
 // Not Found Handler
-handlers.notFound = function(data, callback) {
+handlers.notFound = function(_data, callback) {
   callback(404);
 }
 // Defining request router
 const router = {
-  'sample': handlers.sample
+  'ping': handlers.ping,
+  'hello': handlers.hello
 }
